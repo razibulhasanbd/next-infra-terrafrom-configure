@@ -1,0 +1,78 @@
+# EC2 Instance
+resource "aws_instance" "example_ec2" {
+  ami           = "ami-xxxxxxxxxxxx" # Your desired AMI ID
+  instance_type = "t2.micro"         # Your desired instance type
+  subnet_id     = module.vpc.private_subnets[0] # Ensure to use a private subnet
+
+  tags = {
+    Name = "Ubuntu"
+  }
+}
+
+# Application Load Balancer (ALB)
+resource "aws_lb" "example_alb" {
+  name               = "example-alb"
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = module.vpc.public_subnets # Attach to public subnets
+
+  tags = {
+    Name = "ExampleALB"
+  }
+}
+
+# Target Group for ALB
+resource "aws_lb_target_group" "example_target_group" {
+  name     = "example-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = module.vpc.vpc_id
+
+  health_check {
+    path = "/"
+  }
+
+  tags = {
+    Name = "ExampleTargetGroup"
+  }
+}
+
+# Listener for ALB
+resource "aws_lb_listener" "example_listener" {
+  load_balancer_arn = aws_lb.example_alb.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.example_target_group.arn
+  }
+}
+
+# Auto Scaling Group (ASG)
+resource "aws_autoscaling_group" "example_asg" {
+  desired_capacity     = 2
+  max_size             = 5
+  min_size             = 1
+  vpc_zone_identifier  = module.vpc.public_subnets # Use public subnets
+  launch_configuration = aws_launch_configuration.example_lc.name
+
+  tags = [{
+    key                 = "Name",
+    value               = "ExampleASG",
+    propagate_at_launch = true,
+  }]
+}
+
+# Launch Configuration for ASG
+resource "aws_launch_configuration" "example_lc" {
+  name                        = "example-lc"
+  image_id                    = "ami-xxxxxxxxxxxx" # Your desired AMI ID
+  instance_type               = "t2.micro"         # Your desired instance type
+  security_groups             = [module.vpc.default_security_group_id]
+  key_name                    = "your-key-name"    # Your SSH key name
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
